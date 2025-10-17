@@ -10,6 +10,9 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+console.log('Bot token configured:', TELEGRAM_BOT_TOKEN ? 'YES' : 'NO');
+console.log('Supabase URL:', SUPABASE_URL ? 'YES' : 'NO');
+
 const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
 // Price per page for each level
@@ -61,11 +64,22 @@ async function sendTelegramMessage(chatId: string, text: string, keyboard?: any)
     body.reply_markup = keyboard;
   }
 
-  await fetch(url, {
+  console.log('Sending message to chat:', chatId);
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+  
+  const result = await response.json();
+  console.log('Telegram API response:', result);
+  
+  if (!result.ok) {
+    console.error('Failed to send message:', result);
+    throw new Error(`Telegram API error: ${result.description || 'Unknown error'}`);
+  }
+  
+  return result;
 }
 
 async function getOrCreateUser(update: any) {
@@ -520,7 +534,10 @@ serve(async (req) => {
       const text = update.message.text;
       const state = await getState(userId);
 
+      console.log('Processing text message:', text, 'Current state:', state?.current_step);
+
       if (text === '/start') {
+        console.log('Handling /start command');
         await handleStart(userId, chatId);
       } else if (state?.current_step === 'enter_subject') {
         await handleSubjectInput(userId, chatId, state, text);
@@ -529,6 +546,7 @@ serve(async (req) => {
       } else if (state?.current_step === 'support') {
         await handleSupportMessage(userId, chatId, text, update.message.from?.username);
       } else {
+        console.log('No matching state, defaulting to start');
         await handleStart(userId, chatId);
       }
     }
