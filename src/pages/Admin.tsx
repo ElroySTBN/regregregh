@@ -19,6 +19,7 @@ interface Order {
   urgency: string;
   final_price: number;
   status: string;
+  payment_proof_url?: string;
   created_at: string;
 }
 
@@ -28,6 +29,7 @@ interface Message {
   telegram_username?: string;
   message_text: string;
   is_from_admin: boolean;
+  admin_name?: string;
   thread_date: string;
   created_at: string;
 }
@@ -95,32 +97,37 @@ const Admin = () => {
   const sendReply = async () => {
     if (!selectedUserId || !replyText.trim()) return;
 
-    const { error } = await supabase.from('support_messages').insert({
-      telegram_user_id: selectedUserId,
-      message_text: replyText,
-      is_from_admin: true
+    // Send via edge function to Telegram
+    const { error: funcError } = await supabase.functions.invoke('send-admin-message', {
+      body: {
+        telegram_user_id: selectedUserId,
+        message_text: replyText,
+        admin_name: 'Enrico'
+      }
     });
 
-    if (error) {
+    if (funcError) {
       toast({
-        title: "Erreur",
-        description: "Impossible d'envoyer le message",
+        title: "Erreur Telegram",
+        description: "Impossible d'envoyer le message sur Telegram",
         variant: "destructive"
       });
       return;
     }
 
-    // Send via Telegram
-    const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
-    if (TELEGRAM_BOT_TOKEN) {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: selectedUserId,
-          text: `<b>Enrico 🧑‍💼 (Support):</b>\n\n${replyText}`,
-          parse_mode: 'HTML'
-        })
+    // Save to database
+    const { error } = await supabase.from('support_messages').insert({
+      telegram_user_id: selectedUserId,
+      message_text: replyText,
+      is_from_admin: true,
+      admin_name: 'Enrico'
+    });
+
+    if (error) {
+      toast({
+        title: "Erreur",
+        description: "Message envoyé sur Telegram mais pas sauvegardé",
+        variant: "destructive"
       });
     }
 
@@ -177,92 +184,148 @@ const Admin = () => {
   }, {} as Record<string, Message[]>);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-white mb-2">MasterEDU Admin</h1>
-          <p className="text-slate-300">Interface de gestion premium</p>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-white">Admin MasterEDU</h1>
+          <p className="text-slate-400 text-sm">Gestion des commandes et support</p>
         </div>
 
         <Tabs defaultValue="messages" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 bg-slate-800 border-slate-700">
             <TabsTrigger value="messages" className="data-[state=active]:bg-blue-600">
               <MessageSquare className="w-4 h-4 mr-2" />
-              Messages
+              Support ({Object.keys(groupedMessages).length})
             </TabsTrigger>
             <TabsTrigger value="orders" className="data-[state=active]:bg-blue-600">
               <Package className="w-4 h-4 mr-2" />
-              Commandes
+              Commandes ({orders.length})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="messages" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <Card className="lg:col-span-1 bg-slate-800 border-slate-700 p-4">
-                <h3 className="font-semibold text-white mb-4">Conversations</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <Card className="lg:col-span-1 bg-slate-800 border-slate-700 p-4 max-h-[calc(100vh-240px)] overflow-y-auto">
+                <h3 className="font-semibold text-white mb-3 sticky top-0 bg-slate-800 pb-2">
+                  Conversations actives
+                </h3>
                 <div className="space-y-2">
-                  {Object.entries(groupedMessages).map(([userId, userMessages]) => (
-                    <button
-                      key={userId}
-                      onClick={() => setSelectedUserId(userId)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors ${
-                        selectedUserId === userId
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                      }`}
-                    >
-                      <div className="font-medium">
-                        {userMessages[0].telegram_username ? (
-                          <a 
-                            href={`https://t.me/${userMessages[0].telegram_username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            @{userMessages[0].telegram_username}
-                          </a>
-                        ) : (
-                          `User ${userId.slice(0, 8)}`
-                        )}
-                      </div>
-                      <div className="text-sm opacity-75">
-                        {userMessages.length} message(s)
-                      </div>
-                    </button>
-                  ))}
+                  {Object.entries(groupedMessages)
+                    .sort(([, a], [, b]) => 
+                      new Date(b[0].created_at).getTime() - new Date(a[0].created_at).getTime()
+                    )
+                    .map(([userId, userMessages]) => {
+                      const lastMsg = userMessages[0];
+                      const hasNewMsg = !lastMsg.is_from_admin;
+                      
+                      return (
+                        <button
+                          key={userId}
+                          onClick={() => setSelectedUserId(userId)}
+                          className={`w-full text-left p-3 rounded-lg transition-all ${
+                            selectedUserId === userId
+                              ? 'bg-blue-600 text-white shadow-lg'
+                              : hasNewMsg
+                              ? 'bg-slate-700 text-white border-l-4 border-blue-500'
+                              : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-1">
+                            <div className="font-medium text-sm truncate">
+                              {userMessages[0].telegram_username ? (
+                                <span>@{userMessages[0].telegram_username}</span>
+                              ) : (
+                                `User ${userId.slice(0, 8)}`
+                              )}
+                            </div>
+                            {hasNewMsg && selectedUserId !== userId && (
+                              <span className="bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                                Nouveau
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs opacity-70 truncate">
+                            {lastMsg.message_text.substring(0, 40)}...
+                          </div>
+                          <div className="text-xs opacity-50 mt-1">
+                            {new Date(lastMsg.created_at).toLocaleDateString('fr-FR', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </button>
+                      );
+                    })}
                 </div>
               </Card>
 
-              <Card className="lg:col-span-2 bg-slate-800 border-slate-700 p-4">
+              <Card className="lg:col-span-3 bg-slate-800 border-slate-700 p-4 flex flex-col max-h-[calc(100vh-240px)]">
                 {selectedUserId ? (
                   <>
-                    <div className="mb-4 space-y-3 max-h-96 overflow-y-auto">
-                      {groupedMessages[selectedUserId]?.map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`p-3 rounded-lg ${
-                            msg.is_from_admin
-                              ? 'bg-blue-600 ml-auto max-w-[80%]'
-                              : 'bg-slate-700 mr-auto max-w-[80%]'
-                          }`}
-                        >
-                          <div className="text-xs text-slate-300 mb-1">
-                            {msg.is_from_admin ? 'Vous' : msg.telegram_username || 'Client'}
-                          </div>
-                          <div className="text-white">{msg.message_text}</div>
-                          <div className="text-xs text-slate-400 mt-1">
-                            {new Date(msg.created_at).toLocaleString('fr-FR')}
-                          </div>
-                        </div>
-                      ))}
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-700">
+                      <div>
+                        <h3 className="font-semibold text-white">
+                          {groupedMessages[selectedUserId]?.[0]?.telegram_username ? (
+                            <a 
+                              href={`https://t.me/${groupedMessages[selectedUserId][0].telegram_username}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:underline text-blue-400"
+                            >
+                              @{groupedMessages[selectedUserId][0].telegram_username}
+                            </a>
+                          ) : (
+                            <span>User {selectedUserId.slice(0, 8)}</span>
+                          )}
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                          {groupedMessages[selectedUserId]?.length} message(s)
+                        </p>
+                      </div>
                     </div>
+                    
+                    <div className="flex-1 overflow-y-auto space-y-3 mb-4">
+                      {groupedMessages[selectedUserId]
+                        ?.slice()
+                        .reverse()
+                        .map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`flex ${msg.is_from_admin ? 'justify-end' : 'justify-start'}`}
+                          >
+                            <div
+                              className={`max-w-[75%] p-3 rounded-lg ${
+                                msg.is_from_admin
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-slate-700 text-white'
+                              }`}
+                            >
+                              <div className="text-xs opacity-75 mb-1">
+                                {msg.is_from_admin 
+                                  ? `Support ${msg.admin_name ? `- ${msg.admin_name}` : ''}` 
+                                  : msg.telegram_username || 'Client'}
+                              </div>
+                              <div className="text-sm whitespace-pre-wrap">{msg.message_text}</div>
+                              <div className="text-xs opacity-60 mt-1">
+                                {new Date(msg.created_at).toLocaleTimeString('fr-FR', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                    
                     <div className="space-y-2">
                       <Textarea
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
-                        placeholder="Votre réponse..."
-                        className="bg-slate-700 border-slate-600 text-white"
+                        placeholder="Répondre au client..."
+                        className="bg-slate-700 border-slate-600 text-white resize-none"
+                        rows={3}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
@@ -276,13 +339,16 @@ const Admin = () => {
                         disabled={!replyText.trim()}
                       >
                         <Send className="w-4 h-4 mr-2" />
-                        Envoyer
+                        Envoyer sur Telegram
                       </Button>
                     </div>
                   </>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-slate-400">
-                    Sélectionnez une conversation
+                  <div className="flex-1 flex items-center justify-center text-slate-400">
+                    <div className="text-center">
+                      <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                      <p>Sélectionnez une conversation</p>
+                    </div>
                   </div>
                 )}
               </Card>
@@ -290,76 +356,111 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="orders" className="space-y-4">
-            <div className="grid gap-4">
-              {orders.map((order) => (
-                <Card key={order.id} className="bg-slate-800 border-slate-700 p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold text-white">{order.order_number}</h3>
-                      <p className="text-slate-400">
-                        {order.telegram_username ? (
-                          <a 
-                            href={`https://t.me/${order.telegram_username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:underline"
-                          >
-                            @{order.telegram_username}
-                          </a>
-                        ) : (
-                          `User ${order.telegram_user_id.slice(0, 8)}`
-                        )}
-                      </p>
+            <div className="grid gap-3">
+              {orders
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .map((order) => (
+                <Card key={order.id} className="bg-slate-800 border-slate-700 p-4 hover:border-slate-600 transition-colors">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-lg font-bold text-white">{order.order_number}</h3>
+                            <Badge className={getStatusColor(order.status)}>
+                              {order.status}
+                            </Badge>
+                            {order.payment_proof_url && (
+                              <a
+                                href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/payment-proofs/${order.payment_proof_url}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
+                              >
+                                📷 Voir preuve
+                              </a>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-400">
+                            {order.telegram_username ? (
+                              <a 
+                                href={`https://t.me/${order.telegram_username}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline text-blue-400"
+                              >
+                                @{order.telegram_username}
+                              </a>
+                            ) : (
+                              `User ${order.telegram_user_id.slice(0, 8)}`
+                            )}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-white">{order.final_price}€</div>
+                          <div className="text-xs text-slate-400">
+                            {new Date(order.created_at).toLocaleDateString('fr-FR')}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                        <div className="bg-slate-700/50 p-2 rounded">
+                          <span className="text-slate-400 text-xs">Sujet</span>
+                          <p className="text-white font-medium truncate">{order.subject}</p>
+                        </div>
+                        <div className="bg-slate-700/50 p-2 rounded">
+                          <span className="text-slate-400 text-xs">Niveau</span>
+                          <p className="text-white font-medium">{order.academic_level}</p>
+                        </div>
+                        <div className="bg-slate-700/50 p-2 rounded">
+                          <span className="text-slate-400 text-xs">Pages</span>
+                          <p className="text-white font-medium">{order.length_pages}</p>
+                        </div>
+                        <div className="bg-slate-700/50 p-2 rounded">
+                          <span className="text-slate-400 text-xs">Urgence</span>
+                          <p className="text-white font-medium text-xs">{order.urgency}</p>
+                        </div>
+                      </div>
                     </div>
-                    <Badge className={getStatusColor(order.status)}>
-                      {order.status}
-                    </Badge>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                    <div>
-                      <span className="text-slate-400">Sujet:</span>
-                      <p className="text-white">{order.subject}</p>
+                    <div className="flex flex-wrap lg:flex-col gap-2 lg:w-48">
+                      {order.status === 'pending' && (
+                        <Button
+                          size="sm"
+                          onClick={() => updateOrderStatus(order.id, 'paid')}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700"
+                        >
+                          ✓ Marquer payé
+                        </Button>
+                      )}
+                      {order.status === 'paid' && (
+                        <Button
+                          size="sm"
+                          onClick={() => updateOrderStatus(order.id, 'in_progress')}
+                          className="flex-1 bg-purple-600 hover:bg-purple-700"
+                        >
+                          ⚡ Démarrer
+                        </Button>
+                      )}
+                      {order.status === 'in_progress' && (
+                        <Button
+                          size="sm"
+                          onClick={() => updateOrderStatus(order.id, 'completed')}
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                        >
+                          ✓ Terminer
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedUserId(order.telegram_user_id)}
+                        className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-700"
+                      >
+                        💬 Contacter
+                      </Button>
                     </div>
-                    <div>
-                      <span className="text-slate-400">Niveau:</span>
-                      <p className="text-white">{order.academic_level}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Pages:</span>
-                      <p className="text-white">{order.length_pages}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Prix:</span>
-                      <p className="text-white">{order.final_price}€</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => updateOrderStatus(order.id, 'paid')}
-                      className="border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white"
-                    >
-                      Marquer payé
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => updateOrderStatus(order.id, 'in_progress')}
-                      className="border-purple-600 text-purple-400 hover:bg-purple-600 hover:text-white"
-                    >
-                      En cours
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => updateOrderStatus(order.id, 'completed')}
-                      className="border-green-600 text-green-400 hover:bg-green-600 hover:text-white"
-                    >
-                      Terminé
-                    </Button>
                   </div>
                 </Card>
               ))}

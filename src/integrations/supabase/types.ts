@@ -49,6 +49,7 @@ export type Database = {
           order_number: string
           payment_address: string | null
           payment_crypto_type: string | null
+          payment_proof_url: string | null
           session_token: string
           status: Database["public"]["Enums"]["order_status"] | null
           subject: string
@@ -68,6 +69,7 @@ export type Database = {
           order_number: string
           payment_address?: string | null
           payment_crypto_type?: string | null
+          payment_proof_url?: string | null
           session_token: string
           status?: Database["public"]["Enums"]["order_status"] | null
           subject: string
@@ -87,6 +89,7 @@ export type Database = {
           order_number?: string
           payment_address?: string | null
           payment_crypto_type?: string | null
+          payment_proof_url?: string | null
           session_token?: string
           status?: Database["public"]["Enums"]["order_status"] | null
           subject?: string
@@ -100,6 +103,7 @@ export type Database = {
       }
       support_messages: {
         Row: {
+          admin_name: string | null
           created_at: string | null
           id: string
           is_from_admin: boolean | null
@@ -109,6 +113,7 @@ export type Database = {
           thread_date: string | null
         }
         Insert: {
+          admin_name?: string | null
           created_at?: string | null
           id?: string
           is_from_admin?: boolean | null
@@ -118,6 +123,7 @@ export type Database = {
           thread_date?: string | null
         }
         Update: {
+          admin_name?: string | null
           created_at?: string | null
           id?: string
           is_from_admin?: boolean | null

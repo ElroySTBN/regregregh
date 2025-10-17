@@ -340,7 +340,7 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
   const sessionToken = generateSessionToken();
 
   // Create order in database
-  await supabase.from('orders').insert({
+  const { data: orderData } = await supabase.from('orders').insert({
     order_number: orderNumber,
     telegram_user_id: userId,
     subject: draft.subject,
@@ -352,12 +352,13 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
     final_price: draft.pricing.final,
     session_token: sessionToken,
     status: 'pending'
-  });
+  }).select().single();
 
-  await setState(userId, 'home', []);
+  await setState(userId, 'awaiting_payment_proof', [], { order_number: orderNumber });
 
   const keyboard = {
     inline_keyboard: [
+      [{ text: '📷 Envoyer la preuve de paiement', callback_data: 'upload_proof' }],
       [{ text: '🏠 Accueil', callback_data: 'home' }],
       [{ text: '💬 Contacter le support', callback_data: 'support' }]
     ]
@@ -385,7 +386,7 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
 
 <b>Montant:</b> ${draft.pricing.final}€
 
-Une fois le paiement effectué, envoyez-nous la preuve de transaction via le support. Votre travail sera commencé immédiatement après vérification! 🚀`,
+<b>📷 Envoyez-nous une capture d'écran de votre preuve de paiement</b> pour que nous puissions commencer votre travail immédiatement! 🚀`,
     keyboard,
     messageId
   );
@@ -528,6 +529,26 @@ serve(async (req) => {
         await handleUrgencySelect(userId, chatId, state, urgency, messageId);
       } else if (data === 'confirm_payment') {
         await handleConfirmPayment(userId, chatId, state, messageId);
+      } else if (data === 'upload_proof') {
+        await sendTelegramMessage(
+          chatId,
+          `<b>📷 Envoi de la preuve de paiement</b>
+
+Envoyez-moi une photo de votre preuve de paiement (capture d'écran de la transaction).
+
+Vous pouvez :
+• 📸 Prendre une photo
+• 🖼️ Envoyer une image depuis votre galerie
+• 📋 Faire une capture d'écran et l'envoyer
+
+<i>Une seule image suffit.</i>`,
+          {
+            inline_keyboard: [
+              [{ text: '🔙 Retour', callback_data: 'home' }]
+            ]
+          },
+          messageId
+        );
       }
 
       // Answer callback query
@@ -557,6 +578,51 @@ serve(async (req) => {
       } else {
         console.log('No matching state, defaulting to start');
         await handleStart(userId, chatId);
+      }
+    }
+
+    // Handle photo uploads (payment proofs)
+    if (update.message?.photo) {
+      const state = await getState(userId);
+      
+      if (state?.current_step === 'awaiting_payment_proof' && state.order_draft?.order_number) {
+        const photo = update.message.photo[update.message.photo.length - 1]; // Get highest resolution
+        
+        // Get file path from Telegram
+        const fileResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${photo.file_id}`);
+        const fileData = await fileResponse.json();
+        
+        if (fileData.ok) {
+          const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
+          
+          // Call edge function to upload
+          await fetch(`${SUPABASE_URL}/functions/v1/upload-payment-proof`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+            },
+            body: JSON.stringify({
+              order_number: state.order_draft.order_number,
+              file_url: fileUrl,
+              telegram_user_id: userId
+            })
+          });
+          
+          await setState(userId, 'home', []);
+        }
+      } else {
+        // Photo sent in other context
+        await sendTelegramMessage(
+          chatId,
+          `📷 Photo reçue! Si vous souhaitez envoyer une preuve de paiement, créez d'abord une commande.`,
+          {
+            inline_keyboard: [
+              [{ text: '📝 Nouvelle Commande', callback_data: 'new_order' }],
+              [{ text: '🏠 Accueil', callback_data: 'home' }]
+            ]
+          }
+        );
       }
     }
 
