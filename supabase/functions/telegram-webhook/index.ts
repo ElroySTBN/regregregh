@@ -166,7 +166,7 @@ async function handleStart(userId: string, chatId: string) {
 🎓 <b>2,847 étudiants qui ont réussi</b>
 
 <b>Nos Garanties Premium:</b>
-✅ Remboursement si note < 10/20
+✅ Remboursement si note &lt; 10/20
 ✅ Révisions illimitées
 ✅ Rédacteurs experts certifiés
 ✅ Livraison 100% ponctuelle
