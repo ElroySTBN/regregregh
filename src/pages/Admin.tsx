@@ -212,7 +212,19 @@ const Admin = () => {
                       }`}
                     >
                       <div className="font-medium">
-                        {userMessages[0].telegram_username || `User ${userId.slice(0, 8)}`}
+                        {userMessages[0].telegram_username ? (
+                          <a 
+                            href={`https://t.me/${userMessages[0].telegram_username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            @{userMessages[0].telegram_username}
+                          </a>
+                        ) : (
+                          `User ${userId.slice(0, 8)}`
+                        )}
                       </div>
                       <div className="text-sm opacity-75">
                         {userMessages.length} message(s)
@@ -245,15 +257,26 @@ const Admin = () => {
                         </div>
                       ))}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="space-y-2">
                       <Textarea
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
                         placeholder="Votre réponse..."
                         className="bg-slate-700 border-slate-600 text-white"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            sendReply();
+                          }
+                        }}
                       />
-                      <Button onClick={sendReply} className="bg-blue-600 hover:bg-blue-700">
-                        <Send className="w-4 h-4" />
+                      <Button 
+                        onClick={sendReply} 
+                        className="w-full bg-blue-600 hover:bg-blue-700"
+                        disabled={!replyText.trim()}
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        Envoyer
                       </Button>
                     </div>
                   </>
@@ -274,7 +297,18 @@ const Admin = () => {
                     <div>
                       <h3 className="text-xl font-bold text-white">{order.order_number}</h3>
                       <p className="text-slate-400">
-                        {order.telegram_username || `User ${order.telegram_user_id.slice(0, 8)}`}
+                        {order.telegram_username ? (
+                          <a 
+                            href={`https://t.me/${order.telegram_username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline"
+                          >
+                            @{order.telegram_username}
+                          </a>
+                        ) : (
+                          `User ${order.telegram_user_id.slice(0, 8)}`
+                        )}
                       </p>
                     </div>
                     <Badge className={getStatusColor(order.status)}>

@@ -52,19 +52,27 @@ const LEVEL_DISPLAY = {
   phd: '🔬 Doctorat'
 };
 
-async function sendTelegramMessage(chatId: string, text: string, keyboard?: any) {
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+async function sendTelegramMessage(chatId: string, text: string, keyboard?: any, messageId?: number) {
+  const isEdit = messageId !== undefined;
+  const url = isEdit 
+    ? `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`
+    : `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  
   const body: any = {
     chat_id: chatId,
     text: text,
     parse_mode: 'HTML'
   };
   
+  if (isEdit) {
+    body.message_id = messageId;
+  }
+  
   if (keyboard) {
     body.reply_markup = keyboard;
   }
 
-  console.log('Sending message to chat:', chatId);
+  console.log(isEdit ? 'Editing message' : 'Sending message', 'to chat:', chatId);
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -75,7 +83,7 @@ async function sendTelegramMessage(chatId: string, text: string, keyboard?: any)
   console.log('Telegram API response:', result);
   
   if (!result.ok) {
-    console.error('Failed to send message:', result);
+    console.error('Failed to send/edit message:', result);
     throw new Error(`Telegram API error: ${result.description || 'Unknown error'}`);
   }
   
@@ -148,7 +156,7 @@ function calculatePrice(level: string, pages: number, urgency: string): { base: 
   return { base, multiplier, final };
 }
 
-async function handleStart(userId: string, chatId: string) {
+async function handleStart(userId: string, chatId: string, messageId?: number) {
   await setState(userId, 'home', []);
   
   const keyboard = {
@@ -172,11 +180,12 @@ async function handleStart(userId: string, chatId: string) {
 ✅ Livraison 100% ponctuelle
 
 <b>Comment puis-je vous aider ?</b>`,
-    keyboard
+    keyboard,
+    messageId
   );
 }
 
-async function handleNewOrder(userId: string, chatId: string, state: any) {
+async function handleNewOrder(userId: string, chatId: string, state: any, messageId?: number) {
   const stack = state?.navigation_stack || [];
   stack.push('home');
   await setState(userId, 'enter_subject', stack, {});
@@ -192,7 +201,8 @@ async function handleNewOrder(userId: string, chatId: string, state: any) {
 <b>Étape 1/5: Sujet du devoir</b>
 
 Veuillez décrire le sujet de votre devoir de manière détaillée.`,
-    keyboard
+    keyboard,
+    messageId
   );
 }
 
@@ -227,7 +237,7 @@ Sélectionnez votre niveau académique:`,
   );
 }
 
-async function handleLevelSelect(userId: string, chatId: string, state: any, level: string) {
+async function handleLevelSelect(userId: string, chatId: string, state: any, level: string, messageId?: number) {
   const stack = state.navigation_stack || [];
   stack.push('select_level');
   const draft = { ...state.order_draft, level };
@@ -247,7 +257,8 @@ async function handleLevelSelect(userId: string, chatId: string, state: any, lev
 Niveau: ${LEVEL_DISPLAY[level as keyof typeof LEVEL_DISPLAY]} - ${PRICES[level as keyof typeof PRICES]}€/page
 
 Indiquez le nombre de pages (1 page = ~300 mots):`,
-    keyboard
+    keyboard,
+    messageId
   );
 }
 
@@ -289,7 +300,7 @@ Sélectionnez le délai souhaité:`,
   );
 }
 
-async function handleUrgencySelect(userId: string, chatId: string, state: any, urgency: string) {
+async function handleUrgencySelect(userId: string, chatId: string, state: any, urgency: string, messageId?: number) {
   const draft = state.order_draft;
   const pricing = calculatePrice(draft.level, draft.pages, urgency);
   
@@ -305,8 +316,6 @@ async function handleUrgencySelect(userId: string, chatId: string, state: any, u
       [{ text: '🔙 Précédent', callback_data: 'back' }, { text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
-
-  const oldPrice = Math.round(pricing.base * 1.5);
   
   await sendTelegramMessage(
     chatId,
@@ -317,18 +326,15 @@ async function handleUrgencySelect(userId: string, chatId: string, state: any, u
 <b>Longueur:</b> ${draft.pages} page(s)
 <b>Délai:</b> ${URGENCY_DISPLAY[urgency as keyof typeof URGENCY_DISPLAY]}
 
-<b>💰 Tarification:</b>
-Prix de base: ${pricing.base}€
-Coefficient: ×${pricing.multiplier}
-
-<s>${oldPrice}€</s> <b>${pricing.final}€</b> 🎉
+<b>💰 Prix total: ${pricing.final}€</b>
 
 <b>Confirmez-vous votre commande ?</b>`,
-    keyboard
+    keyboard,
+    messageId
   );
 }
 
-async function handleConfirmPayment(userId: string, chatId: string, state: any) {
+async function handleConfirmPayment(userId: string, chatId: string, state: any, messageId?: number) {
   const draft = state.order_draft;
   const orderNumber = generateOrderNumber();
   const sessionToken = generateSessionToken();
@@ -380,7 +386,8 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any) 
 <b>Montant:</b> ${draft.pricing.final}€
 
 Une fois le paiement effectué, envoyez-nous la preuve de transaction via le support. Votre travail sera commencé immédiatement après vérification! 🚀`,
-    keyboard
+    keyboard,
+    messageId
   );
 }
 
@@ -430,7 +437,7 @@ Vous avez ${orders.length} commande(s). Cliquez pour voir les détails:`,
   );
 }
 
-async function handleSupport(userId: string, chatId: string, state: any) {
+async function handleSupport(userId: string, chatId: string, state: any, messageId?: number) {
   const stack = state?.navigation_stack || [];
   stack.push(state?.current_step || 'home');
   await setState(userId, 'support', stack, state?.order_draft || {});
@@ -446,7 +453,8 @@ async function handleSupport(userId: string, chatId: string, state: any) {
 Envoyez-nous votre message et notre équipe vous répondra dans les plus brefs délais.
 
 <i>Tous les messages sont privés et sécurisés.</i>`,
-    keyboard
+    keyboard,
+    messageId
   );
 }
 
@@ -486,39 +494,40 @@ serve(async (req) => {
     if (update.callback_query) {
       const data = update.callback_query.data;
       const state = await getState(userId);
+      const messageId = update.callback_query.message.message_id;
 
       if (data === 'home') {
-        await handleStart(userId, chatId);
+        await handleStart(userId, chatId, messageId);
       } else if (data === 'new_order') {
-        await handleNewOrder(userId, chatId, state);
+        await handleNewOrder(userId, chatId, state, messageId);
       } else if (data === 'my_orders') {
         await handleMyOrders(userId, chatId);
       } else if (data === 'support') {
-        await handleSupport(userId, chatId, state);
+        await handleSupport(userId, chatId, state, messageId);
       } else if (data === 'back') {
         const stack = state?.navigation_stack || [];
         const previousStep = stack.pop() || 'home';
         await setState(userId, previousStep, stack, state?.order_draft || {});
         
         if (previousStep === 'home') {
-          await handleStart(userId, chatId);
+          await handleStart(userId, chatId, messageId);
         } else if (previousStep === 'enter_subject') {
-          await handleNewOrder(userId, chatId, state);
+          await handleNewOrder(userId, chatId, state, messageId);
         } else if (previousStep === 'select_level') {
           await handleSubjectInput(userId, chatId, state, state.order_draft.subject);
         } else if (previousStep === 'enter_length') {
-          await handleLevelSelect(userId, chatId, state, state.order_draft.level);
+          await handleLevelSelect(userId, chatId, state, state.order_draft.level, messageId);
         } else if (previousStep === 'select_urgency') {
           await handleLengthInput(userId, chatId, state, state.order_draft.pages.toString());
         }
       } else if (data.startsWith('level_')) {
         const level = data.replace('level_', '');
-        await handleLevelSelect(userId, chatId, state, level);
+        await handleLevelSelect(userId, chatId, state, level, messageId);
       } else if (data.startsWith('urgency_')) {
         const urgency = data.replace('urgency_', '');
-        await handleUrgencySelect(userId, chatId, state, urgency);
+        await handleUrgencySelect(userId, chatId, state, urgency, messageId);
       } else if (data === 'confirm_payment') {
-        await handleConfirmPayment(userId, chatId, state);
+        await handleConfirmPayment(userId, chatId, state, messageId);
       }
 
       // Answer callback query
