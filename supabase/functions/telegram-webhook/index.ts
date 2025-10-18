@@ -610,6 +610,24 @@ Vous pouvez :
           });
           
           await setState(userId, 'home', []);
+          
+          await sendTelegramMessage(
+            chatId,
+            `✅ <b>Preuve de paiement reçue!</b>
+
+Votre preuve a été envoyée avec succès. Notre équipe va la vérifier et vous recevrez une confirmation rapidement.
+
+<b>Numéro de commande:</b> <code>${state.order_draft.order_number}</code>
+
+Merci de votre confiance! 🙏`,
+            {
+              inline_keyboard: [
+                [{ text: '📦 Mes Commandes', callback_data: 'my_orders' }],
+                [{ text: '💬 Contacter le support', callback_data: 'support' }],
+                [{ text: '🏠 Accueil', callback_data: 'home' }]
+              ]
+            }
+          );
         }
       } else {
         // Photo sent in other context

@@ -392,7 +392,7 @@ const Admin = () => {
                                 @{order.telegram_username}
                               </a>
                             ) : (
-                              `User ${order.telegram_user_id.slice(0, 8)}`
+                              <span className="text-slate-500">ID: {order.telegram_user_id}</span>
                             )}
                           </p>
                         </div>
@@ -455,8 +455,12 @@ const Admin = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setSelectedUserId(order.telegram_user_id)}
-                        className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-700"
+                        onClick={() => {
+                          setSelectedUserId(order.telegram_user_id);
+                          const tabsTrigger = document.querySelector('[value="messages"]') as HTMLButtonElement;
+                          tabsTrigger?.click();
+                        }}
+                        className="flex-1 border-slate-600 bg-black text-white hover:bg-slate-900"
                       >
                         💬 Contacter
                       </Button>
