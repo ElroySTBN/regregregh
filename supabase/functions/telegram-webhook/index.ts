@@ -26,22 +26,24 @@ const PRICES = {
 
 // Urgency multipliers
 const URGENCY_MULTIPLIERS = {
-  ultra_express: 3.0,
-  express: 2.5,
-  urgent: 2.0,
-  rapid: 1.5,
-  standard: 1.2,
-  economic: 1.0
+  six_hours: 1.8,
+  twelve_hours: 1.7,
+  twenty_four_hours: 1.5,
+  forty_eight_hours: 1.3,
+  three_days: 1.2,
+  seven_days: 1.0,
+  fourteen_days: 0.9
 };
 
 // Urgency display
 const URGENCY_DISPLAY = {
-  ultra_express: '🚨 ULTRA EXPRESS 3h',
-  express: '⚡ EXPRESS 6h',
-  urgent: '🔥 URGENT 12h',
-  rapid: '⏰ RAPIDE 24h',
-  standard: '📅 STANDARD 48h',
-  economic: '📆 ÉCONOMIQUE 7 jours'
+  six_hours: '⚡ 6h (+80%)',
+  twelve_hours: '🔥 12h (+70%)',
+  twenty_four_hours: '⏰ 24h (+50%)',
+  forty_eight_hours: '📅 48h (+30%)',
+  three_days: '📆 3 jours (+20%)',
+  seven_days: '📋 7 jours (Standard)',
+  fourteen_days: '🎯 14 jours (-10%)'
 };
 
 const LEVEL_DISPLAY = {
@@ -161,25 +163,30 @@ async function handleStart(userId: string, chatId: string, messageId?: number) {
   
   const keyboard = {
     inline_keyboard: [
-      [{ text: '📝 Nouvelle Commande', callback_data: 'new_order' }],
-      [{ text: '📦 Mes Commandes', callback_data: 'my_orders' }],
+      [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
+      [{ text: '📋 Mes commandes', callback_data: 'my_orders' }],
+      [{ text: '💰 Tarification', callback_data: 'pricing' }],
       [{ text: '💬 Support', callback_data: 'support' }]
     ]
   };
 
   await sendTelegramMessage(
     chatId,
-    `<b>✨ Bienvenue chez MasterEDU ✨</b>
+    `📚 <b>EduMaster - Services Académiques</b>
 
-🎓 <b>2,847 étudiants qui ont réussi</b>
+Plateforme de rédaction académique professionnelle.
 
-<b>Nos Garanties Premium:</b>
-✅ Remboursement si note &lt; 10/20
-✅ Révisions illimitées
-✅ Rédacteurs experts certifiés
-✅ Livraison 100% ponctuelle
+<b>Services disponibles :</b>
+• Rédaction de travaux académiques
+• Recherche et analyse
+• Révisions et corrections
 
-<b>Comment puis-je vous aider ?</b>`,
+<b>Garanties :</b>
+• Travail original (SANS IA) et personnalisé
+• Respect des délais convenus
+• Support technique inclus
+
+Sélectionnez l'action souhaitée :`,
     keyboard,
     messageId
   );
@@ -191,7 +198,7 @@ async function handleNewOrder(userId: string, chatId: string, state: any, messag
   await setState(userId, 'enter_subject', stack, {});
   
   const keyboard = {
-    inline_keyboard: [[{ text: '🔙 Précédent', callback_data: 'back' }, { text: '🏠 Accueil', callback_data: 'home' }]]
+    inline_keyboard: [[{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]]
   };
 
   await sendTelegramMessage(
@@ -220,7 +227,7 @@ async function handleSubjectInput(userId: string, chatId: string, state: any, su
       [{ text: '🏛️ Université (22€/page)', callback_data: 'level_university' }],
       [{ text: '👨‍🎓 Master (28€/page)', callback_data: 'level_master' }],
       [{ text: '🔬 Doctorat (38€/page)', callback_data: 'level_phd' }],
-      [{ text: '🔙 Précédent', callback_data: 'back' }, { text: '🏠 Accueil', callback_data: 'home' }]
+      [{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]
     ]
   };
 
@@ -245,7 +252,7 @@ async function handleLevelSelect(userId: string, chatId: string, state: any, lev
   await setState(userId, 'enter_length', stack, draft);
   
   const keyboard = {
-    inline_keyboard: [[{ text: '🔙 Précédent', callback_data: 'back' }, { text: '🏠 Accueil', callback_data: 'home' }]]
+    inline_keyboard: [[{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]]
   };
 
   await sendTelegramMessage(
@@ -277,13 +284,14 @@ async function handleLengthInput(userId: string, chatId: string, state: any, len
   
   const keyboard = {
     inline_keyboard: [
-      [{ text: '🚨 ULTRA EXPRESS 3h (×3.0)', callback_data: 'urgency_ultra_express' }],
-      [{ text: '⚡ EXPRESS 6h (×2.5)', callback_data: 'urgency_express' }],
-      [{ text: '🔥 URGENT 12h (×2.0)', callback_data: 'urgency_urgent' }],
-      [{ text: '⏰ RAPIDE 24h (×1.5)', callback_data: 'urgency_rapid' }],
-      [{ text: '📅 STANDARD 48h (×1.2)', callback_data: 'urgency_standard' }],
-      [{ text: '📆 ÉCONOMIQUE 7j (×1.0)', callback_data: 'urgency_economic' }],
-      [{ text: '🔙 Précédent', callback_data: 'back' }, { text: '🏠 Accueil', callback_data: 'home' }]
+      [{ text: '⚡ 6h (+80%)', callback_data: 'urgency_six_hours' }],
+      [{ text: '🔥 12h (+70%)', callback_data: 'urgency_twelve_hours' }],
+      [{ text: '⏰ 24h (+50%)', callback_data: 'urgency_twenty_four_hours' }],
+      [{ text: '📅 48h (+30%)', callback_data: 'urgency_forty_eight_hours' }],
+      [{ text: '📆 3 jours (+20%)', callback_data: 'urgency_three_days' }],
+      [{ text: '📋 7 jours (Standard)', callback_data: 'urgency_seven_days' }],
+      [{ text: '🎯 14 jours (-10%)', callback_data: 'urgency_fourteen_days' }],
+      [{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]
     ]
   };
 
@@ -313,7 +321,7 @@ async function handleUrgencySelect(userId: string, chatId: string, state: any, u
   const keyboard = {
     inline_keyboard: [
       [{ text: '✅ Confirmer', callback_data: 'confirm_payment' }],
-      [{ text: '🔙 Précédent', callback_data: 'back' }, { text: '🏠 Accueil', callback_data: 'home' }]
+      [{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]
     ]
   };
   
@@ -359,8 +367,8 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
   const keyboard = {
     inline_keyboard: [
       [{ text: '📷 Envoyer la preuve de paiement', callback_data: 'upload_proof' }],
-      [{ text: '🏠 Accueil', callback_data: 'home' }],
-      [{ text: '💬 Contacter le support', callback_data: 'support' }]
+      [{ text: '💬 Contacter le support', callback_data: 'support' }],
+      [{ text: '🏠 Menu', callback_data: 'home' }]
     ]
   };
 
@@ -392,7 +400,7 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
   );
 }
 
-async function handleMyOrders(userId: string, chatId: string) {
+async function handleMyOrders(userId: string, chatId: string, messageId?: number) {
   const { data: orders } = await supabase
     .from('orders')
     .select('*')
@@ -403,17 +411,18 @@ async function handleMyOrders(userId: string, chatId: string) {
   if (!orders || orders.length === 0) {
     const keyboard = {
       inline_keyboard: [
-        [{ text: '📝 Nouvelle Commande', callback_data: 'new_order' }],
-        [{ text: '🏠 Accueil', callback_data: 'home' }]
+        [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
+        [{ text: '🏠 Menu', callback_data: 'home' }]
       ]
     };
     
     await sendTelegramMessage(
       chatId,
-      `<b>📦 Mes Commandes</b>
+      `<b>📋 Mes Commandes</b>
 
 Vous n'avez pas encore de commandes.`,
-      keyboard
+      keyboard,
+      messageId
     );
     return;
   }
@@ -425,16 +434,52 @@ Vous n'avez pas encore de commandes.`,
   const keyboard = {
     inline_keyboard: [
       ...orderButtons,
-      [{ text: '🏠 Accueil', callback_data: 'home' }]
+      [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
+      [{ text: '🏠 Menu', callback_data: 'home' }]
     ]
   };
 
   await sendTelegramMessage(
     chatId,
-    `<b>📦 Mes Commandes</b>
+    `<b>📋 Mes Commandes</b>
 
 Vous avez ${orders.length} commande(s). Cliquez pour voir les détails:`,
-    keyboard
+    keyboard,
+    messageId
+  );
+}
+
+async function handlePricing(chatId: string, messageId?: number) {
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
+      [{ text: '🏠 Menu', callback_data: 'home' }]
+    ]
+  };
+
+  await sendTelegramMessage(
+    chatId,
+    `<b>💰 Tarification</b>
+
+<b>Prix par page (300 mots) :</b>
+🏫 Collège : 12€
+🎓 Lycée : 16€
+🏛️ Université : 22€
+👨‍🎓 Master : 28€
+🔬 Doctorat : 38€
+
+<b>Multiplicateurs selon le délai :</b>
+🎯 14 jours : -10%
+📋 7 jours : Prix standard
+📆 3 jours : +20%
+📅 48h : +30%
+⏰ 24h : +50%
+🔥 12h : +70%
+⚡ 6h : +80%
+
+<i>Prix final = (Prix par page × Nombre de pages) × Multiplicateur de délai</i>`,
+    keyboard,
+    messageId
   );
 }
 
@@ -444,7 +489,10 @@ async function handleSupport(userId: string, chatId: string, state: any, message
   await setState(userId, 'support', stack, state?.order_draft || {});
   
   const keyboard = {
-    inline_keyboard: [[{ text: '🔙 Précédent', callback_data: 'back' }, { text: '🏠 Accueil', callback_data: 'home' }]]
+    inline_keyboard: [
+      [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
+      [{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]
+    ]
   };
 
   await sendTelegramMessage(
@@ -502,7 +550,9 @@ serve(async (req) => {
       } else if (data === 'new_order') {
         await handleNewOrder(userId, chatId, state, messageId);
       } else if (data === 'my_orders') {
-        await handleMyOrders(userId, chatId);
+        await handleMyOrders(userId, chatId, messageId);
+      } else if (data === 'pricing') {
+        await handlePricing(chatId, messageId);
       } else if (data === 'support') {
         await handleSupport(userId, chatId, state, messageId);
       } else if (data === 'back') {
@@ -544,7 +594,7 @@ Vous pouvez :
 <i>Une seule image suffit.</i>`,
           {
             inline_keyboard: [
-              [{ text: '🔙 Retour', callback_data: 'home' }]
+              [{ text: '← Retour', callback_data: 'home' }]
             ]
           },
           messageId
@@ -622,9 +672,9 @@ Votre preuve a été envoyée avec succès. Notre équipe va la vérifier et vou
 Merci de votre confiance! 🙏`,
             {
               inline_keyboard: [
-                [{ text: '📦 Mes Commandes', callback_data: 'my_orders' }],
-                [{ text: '💬 Contacter le support', callback_data: 'support' }],
-                [{ text: '🏠 Accueil', callback_data: 'home' }]
+                [{ text: '📋 Mes commandes', callback_data: 'my_orders' }],
+                [{ text: '💬 Support', callback_data: 'support' }],
+                [{ text: '🏠 Menu', callback_data: 'home' }]
               ]
             }
           );
@@ -636,8 +686,8 @@ Merci de votre confiance! 🙏`,
           `📷 Photo reçue! Si vous souhaitez envoyer une preuve de paiement, créez d'abord une commande.`,
           {
             inline_keyboard: [
-              [{ text: '📝 Nouvelle Commande', callback_data: 'new_order' }],
-              [{ text: '🏠 Accueil', callback_data: 'home' }]
+              [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
+              [{ text: '🏠 Menu', callback_data: 'home' }]
             ]
           }
         );
