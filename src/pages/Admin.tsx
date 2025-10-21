@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { MessageSquare, Package, Send } from "lucide-react";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface Order {
   id: string;
@@ -40,6 +41,7 @@ const Admin = () => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const { toast } = useToast();
+  const { permission, requestPermission, isSupported } = useNotifications();
 
   useEffect(() => {
     loadOrders();
@@ -186,9 +188,20 @@ const Admin = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white">Admin MasterEDU</h1>
-          <p className="text-slate-400 text-sm">Gestion des commandes et support</p>
+        <div className="mb-6 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Admin FlashGrade</h1>
+            <p className="text-slate-400 text-sm">Gestion des commandes et support</p>
+          </div>
+          {isSupported && permission !== 'granted' && (
+            <Button 
+              onClick={requestPermission}
+              variant="outline"
+              className="bg-blue-600 hover:bg-blue-700 text-white border-blue-500"
+            >
+              🔔 Activer les notifications
+            </Button>
+          )}
         </div>
 
         <Tabs defaultValue="messages" className="space-y-4">

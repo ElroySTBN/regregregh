@@ -172,7 +172,7 @@ async function handleStart(userId: string, chatId: string, messageId?: number) {
 
   await sendTelegramMessage(
     chatId,
-    `📚 <b>EduMaster - Services Académiques</b>
+    `📚 <b>FlashGrade - Services Académiques</b>
 
 Plateforme de rédaction académique professionnelle.
 

@@ -9,7 +9,7 @@ const Index = () => {
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-bold text-white mb-6">
             <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              MasterEDU
+              FlashGrade
             </span>
           </h1>
           <p className="text-2xl text-slate-300 mb-4">
@@ -62,7 +62,7 @@ const Index = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-white mb-1">Contactez notre bot Telegram</h3>
-                <p className="text-slate-400">Démarrez une conversation avec @MasterEDUBot et décrivez votre besoin</p>
+                <p className="text-slate-400">Démarrez une conversation avec @FlashGradeBot et décrivez votre besoin</p>
               </div>
             </div>
 
