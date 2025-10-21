@@ -141,6 +141,7 @@ export type Database = {
           last_interaction_at: string | null
           last_name: string | null
           telegram_user_id: string
+          user_id: string | null
           username: string | null
         }
         Insert: {
@@ -149,6 +150,7 @@ export type Database = {
           last_interaction_at?: string | null
           last_name?: string | null
           telegram_user_id: string
+          user_id?: string | null
           username?: string | null
         }
         Update: {
@@ -157,7 +159,65 @@ export type Database = {
           last_interaction_at?: string | null
           last_name?: string | null
           telegram_user_id?: string
+          user_id?: string | null
           username?: string | null
+        }
+        Relationships: []
+      }
+      trusted_devices: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          last_used_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          last_used_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          last_used_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      two_factor_codes: {
+        Row: {
+          code: string
+          created_at: string
+          device_id: string
+          expires_at: string
+          id: string
+          telegram_user_id: string
+          user_id: string
+          verified: boolean
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          device_id: string
+          expires_at?: string
+          id?: string
+          telegram_user_id: string
+          user_id: string
+          verified?: boolean
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          device_id?: string
+          expires_at?: string
+          id?: string
+          telegram_user_id?: string
+          user_id?: string
+          verified?: boolean
         }
         Relationships: []
       }
@@ -187,6 +247,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_codes: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
