@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { MessageSquare, Package, Send } from "lucide-react";
+import { MessageSquare, Package, Send, LogOut, Bell } from "lucide-react";
 import { useNotifications } from "@/hooks/useNotifications";
 
 interface Order {
@@ -36,6 +37,9 @@ interface Message {
 }
 
 const Admin = () => {
+  const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -44,29 +48,85 @@ const Admin = () => {
   const { permission, requestPermission, isSupported } = useNotifications();
 
   useEffect(() => {
-    loadOrders();
-    loadMessages();
+    checkAuth();
 
-    // Subscribe to new messages
-    const channel = supabase
-      .channel('support_messages_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'support_messages'
-        },
-        () => {
-          loadMessages();
-        }
-      )
-      .subscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        navigate("/auth");
+      }
+    });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadOrders();
+      loadMessages();
+
+      // Subscribe to new messages
+      const channel = supabase
+        .channel('support_messages_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'support_messages'
+          },
+          () => {
+            loadMessages();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [isAdmin]);
+
+  const checkAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        navigate("/auth");
+        return;
+      }
+
+      // Check if user has admin role
+      const { data: roleData, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", session.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+
+      if (error || !roleData) {
+        toast({
+          variant: "destructive",
+          title: "Accès refusé",
+          description: "Vous n'avez pas les permissions nécessaires",
+        });
+        await supabase.auth.signOut();
+        navigate("/auth");
+        return;
+      }
+
+      setIsAdmin(true);
+    } catch (error) {
+      console.error("Auth check error:", error);
+      navigate("/auth");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
 
   const loadOrders = async () => {
     const { data, error } = await supabase
@@ -185,6 +245,21 @@ const Admin = () => {
     return acc;
   }, {} as Record<string, Message[]>);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-slate-400">Vérification des permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4">
       <div className="max-w-7xl mx-auto">
@@ -193,15 +268,26 @@ const Admin = () => {
             <h1 className="text-3xl font-bold text-white">Admin FlashGrade</h1>
             <p className="text-slate-400 text-sm">Gestion des commandes et support</p>
           </div>
-          {isSupported && permission !== 'granted' && (
+          <div className="flex gap-2">
+            {isSupported && permission !== 'granted' && (
+              <Button 
+                onClick={requestPermission}
+                variant="outline"
+                className="bg-blue-600 hover:bg-blue-700 text-white border-blue-500"
+              >
+                <Bell className="w-4 h-4 mr-2" />
+                🔔 Activer les notifications
+              </Button>
+            )}
             <Button 
-              onClick={requestPermission}
+              onClick={handleLogout}
               variant="outline"
-              className="bg-blue-600 hover:bg-blue-700 text-white border-blue-500"
+              className="bg-slate-800 hover:bg-slate-700 text-white border-slate-600"
             >
-              🔔 Activer les notifications
+              <LogOut className="w-4 h-4 mr-2" />
+              Déconnexion
             </Button>
-          )}
+          </div>
         </div>
 
         <Tabs defaultValue="messages" className="space-y-4">
