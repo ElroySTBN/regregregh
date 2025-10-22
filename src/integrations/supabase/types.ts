@@ -45,6 +45,7 @@ export type Database = {
           created_at: string | null
           final_price: number
           id: string
+          instruction_file_url: string | null
           length_pages: number
           order_number: string
           payment_address: string | null
@@ -65,6 +66,7 @@ export type Database = {
           created_at?: string | null
           final_price: number
           id?: string
+          instruction_file_url?: string | null
           length_pages: number
           order_number: string
           payment_address?: string | null
@@ -85,6 +87,7 @@ export type Database = {
           created_at?: string | null
           final_price?: number
           id?: string
+          instruction_file_url?: string | null
           length_pages?: number
           order_number?: string
           payment_address?: string | null

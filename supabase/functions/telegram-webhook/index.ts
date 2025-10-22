@@ -195,19 +195,28 @@ Sélectionnez l'action souhaitée :`,
 async function handleNewOrder(userId: string, chatId: string, state: any, messageId?: number) {
   const stack = state?.navigation_stack || [];
   stack.push('home');
-  await setState(userId, 'enter_subject', stack, {});
+  await setState(userId, 'choose_instruction_method', stack, {});
   
   const keyboard = {
-    inline_keyboard: [[{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]]
+    inline_keyboard: [
+      [{ text: '📝 Écrire la consigne', callback_data: 'type_instruction' }],
+      [{ text: '📎 Uploader un fichier', callback_data: 'upload_instruction' }],
+      [{ text: '🏠 Accueil', callback_data: 'home' }]
+    ]
   };
 
   await sendTelegramMessage(
     chatId,
     `<b>📝 Nouvelle Commande</b>
 
-<b>Étape 1/5: Sujet du devoir</b>
+<b>Étape 1/5: Consigne du devoir</b>
 
-Veuillez décrire le sujet de votre devoir de manière détaillée.`,
+Comment souhaitez-vous fournir votre consigne ?
+
+📝 <b>Écrire</b> : Tapez votre consigne
+📎 <b>Upload</b> : Envoyez une photo ou PDF de votre consigne
+
+<i>💡 L'upload est souvent plus rapide !</i>`,
     keyboard,
     messageId
   );
@@ -227,7 +236,7 @@ async function handleSubjectInput(userId: string, chatId: string, state: any, su
       [{ text: '🏛️ Université (22€/page)', callback_data: 'level_university' }],
       [{ text: '👨‍🎓 Master (28€/page)', callback_data: 'level_master' }],
       [{ text: '🔬 Doctorat (38€/page)', callback_data: 'level_phd' }],
-      [{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]
+      [{ text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
 
@@ -237,7 +246,7 @@ async function handleSubjectInput(userId: string, chatId: string, state: any, su
 
 <b>Étape 2/5: Niveau académique</b>
 
-Sujet: <i>${subject}</i>
+Consigne reçue ✅
 
 Sélectionnez votre niveau académique:`,
     keyboard
@@ -252,7 +261,7 @@ async function handleLevelSelect(userId: string, chatId: string, state: any, lev
   await setState(userId, 'enter_length', stack, draft);
   
   const keyboard = {
-    inline_keyboard: [[{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]]
+    inline_keyboard: [[{ text: '🏠 Accueil', callback_data: 'home' }]]
   };
 
   await sendTelegramMessage(
@@ -291,7 +300,7 @@ async function handleLengthInput(userId: string, chatId: string, state: any, len
       [{ text: '📆 3 jours (+20%)', callback_data: 'urgency_three_days' }],
       [{ text: '📋 7 jours (Standard)', callback_data: 'urgency_seven_days' }],
       [{ text: '🎯 14 jours (-10%)', callback_data: 'urgency_fourteen_days' }],
-      [{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]
+      [{ text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
 
@@ -318,10 +327,14 @@ async function handleUrgencySelect(userId: string, chatId: string, state: any, u
   
   await setState(userId, 'confirm_order', stack, completeDraft);
   
+  const instructionInfo = draft.instruction_file_url 
+    ? '📎 <i>Fichier uploadé</i>' 
+    : draft.subject;
+  
   const keyboard = {
     inline_keyboard: [
-      [{ text: '✅ Confirmer', callback_data: 'confirm_payment' }],
-      [{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]
+      [{ text: '✅ Confirmer et payer', callback_data: 'confirm_payment' }],
+      [{ text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
   
@@ -329,14 +342,14 @@ async function handleUrgencySelect(userId: string, chatId: string, state: any, u
     chatId,
     `<b>📝 Récapitulatif de votre commande</b>
 
-<b>Sujet:</b> ${draft.subject}
+<b>Consigne:</b> ${instructionInfo}
 <b>Niveau:</b> ${LEVEL_DISPLAY[draft.level as keyof typeof LEVEL_DISPLAY]}
 <b>Longueur:</b> ${draft.pages} page(s)
 <b>Délai:</b> ${URGENCY_DISPLAY[urgency as keyof typeof URGENCY_DISPLAY]}
 
 <b>💰 Prix total: ${pricing.final}€</b>
 
-<b>Confirmez-vous votre commande ?</b>`,
+<b>Tout est correct ?</b>`,
     keyboard,
     messageId
   );
@@ -351,7 +364,7 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
   const { data: orderData } = await supabase.from('orders').insert({
     order_number: orderNumber,
     telegram_user_id: userId,
-    subject: draft.subject,
+    subject: draft.subject || '(Fichier uploadé)',
     academic_level: draft.level,
     length_pages: draft.pages,
     urgency: draft.urgency,
@@ -359,6 +372,7 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
     urgency_multiplier: draft.pricing.multiplier,
     final_price: draft.pricing.final,
     session_token: sessionToken,
+    instruction_file_url: draft.instruction_file_url || null,
     status: 'pending'
   }).select().single();
 
@@ -367,18 +381,18 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
   const keyboard = {
     inline_keyboard: [
       [{ text: '📷 Envoyer la preuve de paiement', callback_data: 'upload_proof' }],
-      [{ text: '💬 Contacter le support', callback_data: 'support' }],
-      [{ text: '🏠 Menu', callback_data: 'home' }]
+      [{ text: '💬 Support', callback_data: 'support' }],
+      [{ text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
 
   await sendTelegramMessage(
     chatId,
-    `<b>✅ Commande créée avec succès!</b>
+    `<b>✅ Commande créée!</b>
 
-<b>Numéro de commande:</b> <code>${orderNumber}</code>
+<b>N° commande:</b> <code>${orderNumber}</code>
 
-<b>💳 Paiement par Crypto:</b>
+<b>💳 Paiement Crypto:</b>
 
 <b>Bitcoin (BTC):</b>
 <code>bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh</code>
@@ -386,15 +400,12 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
 <b>Ethereum (ETH):</b>
 <code>0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb</code>
 
-<b>Litecoin (LTC):</b>
-<code>ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7k</code>
-
 <b>USDT (TRC20):</b>
 <code>TGDqJAoJTfb9erFzkGqq5fwJTQYbHmB5tM</code>
 
 <b>Montant:</b> ${draft.pricing.final}€
 
-<b>📷 Envoyez-nous une capture d'écran de votre preuve de paiement</b> pour que nous puissions commencer votre travail immédiatement! 🚀`,
+📷 <b>Envoyez votre preuve de paiement</b> pour qu'on commence immédiatement! 🚀`,
     keyboard,
     messageId
   );
@@ -412,7 +423,7 @@ async function handleMyOrders(userId: string, chatId: string, messageId?: number
     const keyboard = {
       inline_keyboard: [
         [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
-        [{ text: '🏠 Menu', callback_data: 'home' }]
+        [{ text: '🏠 Accueil', callback_data: 'home' }]
       ]
     };
     
@@ -420,7 +431,7 @@ async function handleMyOrders(userId: string, chatId: string, messageId?: number
       chatId,
       `<b>📋 Mes Commandes</b>
 
-Vous n'avez pas encore de commandes.`,
+Aucune commande pour l'instant.`,
       keyboard,
       messageId
     );
@@ -435,7 +446,7 @@ Vous n'avez pas encore de commandes.`,
     inline_keyboard: [
       ...orderButtons,
       [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
-      [{ text: '🏠 Menu', callback_data: 'home' }]
+      [{ text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
 
@@ -443,7 +454,7 @@ Vous n'avez pas encore de commandes.`,
     chatId,
     `<b>📋 Mes Commandes</b>
 
-Vous avez ${orders.length} commande(s). Cliquez pour voir les détails:`,
+Vous avez ${orders.length} commande(s):`,
     keyboard,
     messageId
   );
@@ -490,8 +501,7 @@ async function handleSupport(userId: string, chatId: string, state: any, message
   
   const keyboard = {
     inline_keyboard: [
-      [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
-      [{ text: '← Retour', callback_data: 'back' }, { text: '🏠 Menu', callback_data: 'home' }]
+      [{ text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
 
@@ -499,7 +509,7 @@ async function handleSupport(userId: string, chatId: string, state: any, message
     chatId,
     `<b>💬 Support Client</b>
 
-Envoyez-nous votre message et notre équipe vous répondra dans les plus brefs délais.
+Envoyez-nous votre message et notre équipe vous répondra rapidement.
 
 <i>Tous les messages sont privés et sécurisés.</i>`,
     keyboard,
@@ -549,6 +559,47 @@ serve(async (req) => {
         await handleStart(userId, chatId, messageId);
       } else if (data === 'new_order') {
         await handleNewOrder(userId, chatId, state, messageId);
+      } else if (data === 'type_instruction') {
+        const stack = state?.navigation_stack || [];
+        stack.push('choose_instruction_method');
+        await setState(userId, 'enter_subject', stack, {});
+        
+        const keyboard = {
+          inline_keyboard: [[{ text: '🏠 Accueil', callback_data: 'home' }]]
+        };
+        
+        await sendTelegramMessage(
+          chatId,
+          `<b>📝 Nouvelle Commande</b>
+
+<b>Étape 1/5: Consigne</b>
+
+Décrivez votre consigne de manière détaillée:`,
+          keyboard,
+          messageId
+        );
+      } else if (data === 'upload_instruction') {
+        const stack = state?.navigation_stack || [];
+        stack.push('choose_instruction_method');
+        await setState(userId, 'awaiting_instruction_file', stack, {});
+        
+        await sendTelegramMessage(
+          chatId,
+          `<b>📎 Upload de la consigne</b>
+
+Envoyez-moi votre consigne:
+• 📸 Photo du document
+• 📄 Fichier PDF
+• 🖼️ Capture d'écran
+
+<i>Un seul fichier suffit.</i>`,
+          {
+            inline_keyboard: [
+              [{ text: '🏠 Accueil', callback_data: 'home' }]
+            ]
+          },
+          messageId
+        );
       } else if (data === 'my_orders') {
         await handleMyOrders(userId, chatId, messageId);
       } else if (data === 'pricing') {
@@ -631,21 +682,87 @@ Vous pouvez :
       }
     }
 
-    // Handle photo uploads (payment proofs)
-    if (update.message?.photo) {
+    // Handle photo/document uploads
+    if (update.message?.photo || update.message?.document) {
       const state = await getState(userId);
       
-      if (state?.current_step === 'awaiting_payment_proof' && state.order_draft?.order_number) {
-        const photo = update.message.photo[update.message.photo.length - 1]; // Get highest resolution
-        
-        // Get file path from Telegram
-        const fileResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${photo.file_id}`);
+      // Get file info
+      let fileId, fileName;
+      if (update.message?.photo) {
+        const photo = update.message.photo[update.message.photo.length - 1];
+        fileId = photo.file_id;
+        fileName = `photo_${Date.now()}.jpg`;
+      } else if (update.message?.document) {
+        fileId = update.message.document.file_id;
+        fileName = update.message.document.file_name || `document_${Date.now()}`;
+      }
+      
+      if (state?.current_step === 'awaiting_instruction_file') {
+        // Upload instruction file
+        const fileResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`);
         const fileData = await fileResponse.json();
         
         if (fileData.ok) {
           const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
           
-          // Call edge function to upload
+          // Upload to storage
+          const uploadResponse = await fetch(`${SUPABASE_URL}/functions/v1/upload-order-instruction`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+            },
+            body: JSON.stringify({
+              file_url: fileUrl,
+              telegram_user_id: userId
+            })
+          });
+          
+          const uploadResult = await uploadResponse.json();
+          
+          if (uploadResult.success) {
+            const stack = state.navigation_stack || [];
+            stack.push('awaiting_instruction_file');
+            const draft = { 
+              ...state.order_draft, 
+              instruction_file_url: uploadResult.file_path,
+              subject: '(Fichier uploadé)' 
+            };
+            
+            await setState(userId, 'select_level', stack, draft);
+            
+            const keyboard = {
+              inline_keyboard: [
+                [{ text: '🏫 Collège (12€/page)', callback_data: 'level_college' }],
+                [{ text: '🎓 Lycée (16€/page)', callback_data: 'level_highschool' }],
+                [{ text: '🏛️ Université (22€/page)', callback_data: 'level_university' }],
+                [{ text: '👨‍🎓 Master (28€/page)', callback_data: 'level_master' }],
+                [{ text: '🔬 Doctorat (38€/page)', callback_data: 'level_phd' }],
+                [{ text: '🏠 Accueil', callback_data: 'home' }]
+              ]
+            };
+            
+            await sendTelegramMessage(
+              chatId,
+              `<b>📝 Nouvelle Commande</b>
+
+<b>Étape 2/5: Niveau académique</b>
+
+Fichier reçu ✅
+
+Sélectionnez votre niveau académique:`,
+              keyboard
+            );
+          }
+        }
+      } else if (state?.current_step === 'awaiting_payment_proof' && state.order_draft?.order_number) {
+        // Upload payment proof
+        const fileResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`);
+        const fileData = await fileResponse.json();
+        
+        if (fileData.ok) {
+          const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
+          
           await fetch(`${SUPABASE_URL}/functions/v1/upload-payment-proof`, {
             method: 'POST',
             headers: {
@@ -674,20 +791,20 @@ Merci de votre confiance! 🙏`,
               inline_keyboard: [
                 [{ text: '📋 Mes commandes', callback_data: 'my_orders' }],
                 [{ text: '💬 Support', callback_data: 'support' }],
-                [{ text: '🏠 Menu', callback_data: 'home' }]
+                [{ text: '🏠 Accueil', callback_data: 'home' }]
               ]
             }
           );
         }
       } else {
-        // Photo sent in other context
+        // File sent in other context
         await sendTelegramMessage(
           chatId,
-          `📷 Photo reçue! Si vous souhaitez envoyer une preuve de paiement, créez d'abord une commande.`,
+          `📎 Fichier reçu! Pour créer une commande, utilisez le menu principal.`,
           {
             inline_keyboard: [
               [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
-              [{ text: '🏠 Menu', callback_data: 'home' }]
+              [{ text: '🏠 Accueil', callback_data: 'home' }]
             ]
           }
         );
