@@ -325,7 +325,7 @@ async function handleUrgencySelect(userId: string, chatId: string, state: any, u
   stack.push('select_urgency');
   const completeDraft = { ...draft, urgency, pricing };
   
-  await setState(userId, 'confirm_order', stack, completeDraft);
+  await setState(userId, 'enter_referral_code', stack, completeDraft);
   
   const instructionInfo = draft.instruction_file_url 
     ? '📎 <i>Fichier uploadé</i>' 
@@ -333,23 +333,18 @@ async function handleUrgencySelect(userId: string, chatId: string, state: any, u
   
   const keyboard = {
     inline_keyboard: [
-      [{ text: '✅ Confirmer et payer', callback_data: 'confirm_payment' }],
+      [{ text: '➡️ Continuer sans code', callback_data: 'skip_referral' }],
       [{ text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
   
   await sendTelegramMessage(
     chatId,
-    `<b>📝 Récapitulatif de votre commande</b>
+    `<b>📝 Code de parrainage (optionnel)</b>
 
-<b>Consigne:</b> ${instructionInfo}
-<b>Niveau:</b> ${LEVEL_DISPLAY[draft.level as keyof typeof LEVEL_DISPLAY]}
-<b>Longueur:</b> ${draft.pages} page(s)
-<b>Délai:</b> ${URGENCY_DISPLAY[urgency as keyof typeof URGENCY_DISPLAY]}
+Si vous avez un code de parrainage, envoyez-le maintenant pour bénéficier d'une réduction de 10% !
 
-<b>💰 Prix total: ${pricing.final}€</b>
-
-<b>Tout est correct ?</b>`,
+Sinon, cliquez sur "Continuer sans code" 👇`,
     keyboard,
     messageId
   );
@@ -359,6 +354,17 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
   const draft = state.order_draft;
   const orderNumber = generateOrderNumber();
   const sessionToken = generateSessionToken();
+
+  // Get user's wallet balance
+  const { data: referralData } = await supabase
+    .from('referral_codes')
+    .select('available_balance')
+    .eq('telegram_user_id', userId)
+    .single();
+
+  const walletBalance = referralData?.available_balance || 0;
+  const walletAmountUsed = Math.min(walletBalance, draft.pricing.final);
+  const finalPrice = draft.pricing.final - walletAmountUsed;
 
   // Create order in database
   const { data: orderData } = await supabase.from('orders').insert({
@@ -373,8 +379,18 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
     final_price: draft.pricing.final,
     session_token: sessionToken,
     instruction_file_url: draft.instruction_file_url || null,
-    status: 'pending'
+    status: 'pending',
+    used_referral_code: draft.referral_code || null,
+    wallet_amount_used: walletAmountUsed
   }).select().single();
+
+  // Deduct wallet balance if used
+  if (walletAmountUsed > 0) {
+    await supabase
+      .from('referral_codes')
+      .update({ available_balance: walletBalance - walletAmountUsed })
+      .eq('telegram_user_id', userId);
+  }
 
   await setState(userId, 'awaiting_payment_proof', [], { order_number: orderNumber });
 
@@ -386,11 +402,23 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
     ]
   };
 
-  await sendTelegramMessage(
-    chatId,
-    `<b>✅ Commande créée!</b>
+  let paymentMessage = `<b>✅ Commande créée!</b>
 
 <b>N° commande:</b> <code>${orderNumber}</code>
+
+<b>💰 Prix total:</b> ${draft.pricing.final}€`;
+
+  if (walletAmountUsed > 0) {
+    paymentMessage += `
+<b>🎁 Bons d'achat utilisés:</b> -${walletAmountUsed}€
+<b>💳 Montant à payer:</b> ${finalPrice}€`;
+  } else {
+    paymentMessage += `
+<b>💳 Montant à payer:</b> ${finalPrice}€`;
+  }
+
+  if (finalPrice > 0) {
+    paymentMessage += `
 
 <b>💳 Paiement Crypto:</b>
 
@@ -403,9 +431,18 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
 <b>USDT (TRC20):</b>
 <code>TGDqJAoJTfb9erFzkGqq5fwJTQYbHmB5tM</code>
 
-<b>Montant:</b> ${draft.pricing.final}€
+📷 <b>Envoyez votre preuve de paiement</b> pour qu'on commence immédiatement! 🚀`;
+  } else {
+    paymentMessage += `
 
-📷 <b>Envoyez votre preuve de paiement</b> pour qu'on commence immédiatement! 🚀`,
+✅ <b>Commande entièrement payée avec vos bons d'achat!</b>
+
+📸 Envoyez quand même une capture d'écran de cette conversation comme confirmation.`;
+  }
+
+  await sendTelegramMessage(
+    chatId,
+    paymentMessage,
     keyboard,
     messageId
   );
@@ -427,7 +464,8 @@ async function handleReferral(userId: string, chatId: string, messageId?: number
       .from('referral_codes')
       .insert({
         telegram_user_id: userId,
-        code: codeResult
+        code: codeResult,
+        available_balance: 0
       })
       .select()
       .single();
@@ -443,6 +481,7 @@ async function handleReferral(userId: string, chatId: string, messageId?: number
 
   const referralCount = referrals?.length || 0;
   const totalEarnings = referralData?.total_earnings || 0;
+  const availableBalance = referralData?.available_balance || 0;
 
   const keyboard = {
     inline_keyboard: [
@@ -457,16 +496,133 @@ async function handleReferral(userId: string, chatId: string, messageId?: number
 
 <b>Ton code personnel:</b> <code>${referralData?.code}</code>
 
+<b>💰 Ta cagnotte:</b> ${availableBalance}€ en bons d'achat
+
 <b>Comment ça marche ?</b>
 • Partage ton code avec des amis
 • Ils obtiennent <b>10% de réduction</b> sur leur 1ère commande
-• Tu gagnes <b>5€</b> par filleul ayant commandé
+• Tu reçois <b>10€ de bons d'achat</b> pour chaque 100€ dépensés par tes filleuls
+• Utilise tes bons d'achat pour payer tes prochaines commandes
+• <b>Cumulable à l'infini !</b> 🚀
 
 <b>Tes statistiques:</b>
 👥 Personnes parrainées: ${referralCount}
-💰 Gains totaux: ${totalEarnings}€
+💵 Total des bons gagnés: ${totalEarnings}€
 
 <i>💡 Clique sur "Partager" pour envoyer ton code facilement!</i>`,
+    keyboard,
+    messageId
+  );
+}
+
+async function handleReferralCode(userId: string, chatId: string, state: any, code: string) {
+  const draft = state.order_draft;
+  
+  // Validate referral code
+  const { data: referralData } = await supabase
+    .from('referral_codes')
+    .select('telegram_user_id')
+    .eq('code', code.toUpperCase())
+    .single();
+
+  if (!referralData) {
+    await sendTelegramMessage(
+      chatId,
+      `❌ Code invalide. Réessayez ou cliquez sur "Continuer sans code".`,
+      {
+        inline_keyboard: [
+          [{ text: '➡️ Continuer sans code', callback_data: 'skip_referral' }],
+          [{ text: '🏠 Accueil', callback_data: 'home' }]
+        ]
+      }
+    );
+    return;
+  }
+
+  if (referralData.telegram_user_id === userId) {
+    await sendTelegramMessage(
+      chatId,
+      `❌ Vous ne pouvez pas utiliser votre propre code !`,
+      {
+        inline_keyboard: [
+          [{ text: '➡️ Continuer sans code', callback_data: 'skip_referral' }],
+          [{ text: '🏠 Accueil', callback_data: 'home' }]
+        ]
+      }
+    );
+    return;
+  }
+
+  // Apply 10% discount
+  const discount = Math.round(draft.pricing.final * 0.1 * 100) / 100;
+  const discountedPrice = draft.pricing.final - discount;
+  
+  const updatedDraft = {
+    ...draft,
+    referral_code: code.toUpperCase(),
+    referral_discount: discount,
+    pricing: {
+      ...draft.pricing,
+      final: discountedPrice
+    }
+  };
+
+  const stack = state.navigation_stack || [];
+  await setState(userId, 'confirm_order', stack, updatedDraft);
+
+  await showOrderSummary(userId, chatId, updatedDraft);
+}
+
+async function showOrderSummary(userId: string, chatId: string, draft: any, messageId?: number) {
+  const instructionInfo = draft.instruction_file_url 
+    ? '📎 <i>Fichier uploadé</i>' 
+    : draft.subject;
+
+  // Get user's wallet balance
+  const { data: referralData } = await supabase
+    .from('referral_codes')
+    .select('available_balance')
+    .eq('telegram_user_id', userId)
+    .single();
+
+  const walletBalance = referralData?.available_balance || 0;
+  
+  let priceBreakdown = `<b>💰 Prix:</b> ${draft.pricing.final}€`;
+  
+  if (draft.referral_discount) {
+    priceBreakdown = `<b>💰 Prix initial:</b> ${(draft.pricing.final + draft.referral_discount).toFixed(2)}€
+<b>🎁 Réduction parrainage (-10%):</b> -${draft.referral_discount}€
+<b>💳 Prix final:</b> ${draft.pricing.final}€`;
+  }
+
+  if (walletBalance > 0) {
+    const willUse = Math.min(walletBalance, draft.pricing.final);
+    priceBreakdown += `
+
+<b>💼 Bons d'achat disponibles:</b> ${walletBalance}€
+<b>✨ Sera utilisé automatiquement:</b> ${willUse}€
+<b>🎯 Reste à payer:</b> ${(draft.pricing.final - willUse).toFixed(2)}€`;
+  }
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '✅ Confirmer et payer', callback_data: 'confirm_payment' }],
+      [{ text: '🏠 Accueil', callback_data: 'home' }]
+    ]
+  };
+  
+  await sendTelegramMessage(
+    chatId,
+    `<b>📝 Récapitulatif de votre commande</b>
+
+<b>Consigne:</b> ${instructionInfo}
+<b>Niveau:</b> ${LEVEL_DISPLAY[draft.level as keyof typeof LEVEL_DISPLAY]}
+<b>Longueur:</b> ${draft.pages} page(s)
+<b>Délai:</b> ${URGENCY_DISPLAY[draft.urgency as keyof typeof URGENCY_DISPLAY]}
+
+${priceBreakdown}
+
+<b>Tout est correct ?</b>`,
     keyboard,
     messageId
   );
@@ -662,6 +818,8 @@ Vous pouvez :
           },
           messageId
         );
+      } else if (data === 'skip_referral') {
+        await showOrderSummary(userId, chatId, state.order_draft, messageId);
       }
 
       // Answer callback query
@@ -686,6 +844,8 @@ Vous pouvez :
         await handleSubjectInput(userId, chatId, state, text);
       } else if (state?.current_step === 'enter_length') {
         await handleLengthInput(userId, chatId, state, text);
+      } else if (state?.current_step === 'enter_referral_code') {
+        await handleReferralCode(userId, chatId, state, text);
       } else if (state?.current_step === 'support') {
         await handleSupportMessage(userId, chatId, text, update.message.from?.username);
       } else {

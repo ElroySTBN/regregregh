@@ -203,18 +203,35 @@ const Admin = () => {
   };
 
   const updateOrderStatus = async (orderId: string, newStatus: 'pending' | 'paid' | 'in_progress' | 'review' | 'completed' | 'cancelled') => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: newStatus })
-      .eq('id', orderId);
-
-    if (error) {
-      toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour le statut",
-        variant: "destructive"
+    // If marking as paid, use the edge function to handle referral credits
+    if (newStatus === 'paid') {
+      const { error } = await supabase.functions.invoke('mark-order-paid', {
+        body: { order_id: orderId }
       });
-      return;
+
+      if (error) {
+        toast({
+          title: "Erreur",
+          description: "Impossible de mettre à jour le statut",
+          variant: "destructive"
+        });
+        return;
+      }
+    } else {
+      // For other status updates, use direct update
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      if (error) {
+        toast({
+          title: "Erreur",
+          description: "Impossible de mettre à jour le statut",
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
     toast({

@@ -60,6 +60,7 @@ export type Database = {
           urgency: Database["public"]["Enums"]["urgency_level"]
           urgency_multiplier: number
           used_referral_code: string | null
+          wallet_amount_used: number | null
         }
         Insert: {
           academic_level: Database["public"]["Enums"]["academic_level"]
@@ -82,6 +83,7 @@ export type Database = {
           urgency: Database["public"]["Enums"]["urgency_level"]
           urgency_multiplier: number
           used_referral_code?: string | null
+          wallet_amount_used?: number | null
         }
         Update: {
           academic_level?: Database["public"]["Enums"]["academic_level"]
@@ -104,11 +106,13 @@ export type Database = {
           urgency?: Database["public"]["Enums"]["urgency_level"]
           urgency_multiplier?: number
           used_referral_code?: string | null
+          wallet_amount_used?: number | null
         }
         Relationships: []
       }
       referral_codes: {
         Row: {
+          available_balance: number | null
           code: string
           created_at: string | null
           referrals_count: number | null
@@ -116,6 +120,7 @@ export type Database = {
           total_earnings: number | null
         }
         Insert: {
+          available_balance?: number | null
           code: string
           created_at?: string | null
           referrals_count?: number | null
@@ -123,6 +128,7 @@ export type Database = {
           total_earnings?: number | null
         }
         Update: {
+          available_balance?: number | null
           code?: string
           created_at?: string | null
           referrals_count?: number | null
@@ -134,6 +140,7 @@ export type Database = {
       referral_usage: {
         Row: {
           commission_amount: number
+          commission_paid: boolean | null
           created_at: string | null
           discount_amount: number
           id: string
@@ -143,6 +150,7 @@ export type Database = {
         }
         Insert: {
           commission_amount: number
+          commission_paid?: boolean | null
           created_at?: string | null
           discount_amount: number
           id?: string
@@ -152,6 +160,7 @@ export type Database = {
         }
         Update: {
           commission_amount?: number
+          commission_paid?: boolean | null
           created_at?: string | null
           discount_amount?: number
           id?: string
