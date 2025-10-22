@@ -59,6 +59,7 @@ export type Database = {
           updated_at: string | null
           urgency: Database["public"]["Enums"]["urgency_level"]
           urgency_multiplier: number
+          used_referral_code: string | null
         }
         Insert: {
           academic_level: Database["public"]["Enums"]["academic_level"]
@@ -80,6 +81,7 @@ export type Database = {
           updated_at?: string | null
           urgency: Database["public"]["Enums"]["urgency_level"]
           urgency_multiplier: number
+          used_referral_code?: string | null
         }
         Update: {
           academic_level?: Database["public"]["Enums"]["academic_level"]
@@ -101,8 +103,71 @@ export type Database = {
           updated_at?: string | null
           urgency?: Database["public"]["Enums"]["urgency_level"]
           urgency_multiplier?: number
+          used_referral_code?: string | null
         }
         Relationships: []
+      }
+      referral_codes: {
+        Row: {
+          code: string
+          created_at: string | null
+          referrals_count: number | null
+          telegram_user_id: string
+          total_earnings: number | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          referrals_count?: number | null
+          telegram_user_id: string
+          total_earnings?: number | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          referrals_count?: number | null
+          telegram_user_id?: string
+          total_earnings?: number | null
+        }
+        Relationships: []
+      }
+      referral_usage: {
+        Row: {
+          commission_amount: number
+          created_at: string | null
+          discount_amount: number
+          id: string
+          order_id: string | null
+          referred_telegram_user_id: string
+          referrer_telegram_user_id: string
+        }
+        Insert: {
+          commission_amount: number
+          created_at?: string | null
+          discount_amount: number
+          id?: string
+          order_id?: string | null
+          referred_telegram_user_id: string
+          referrer_telegram_user_id: string
+        }
+        Update: {
+          commission_amount?: number
+          created_at?: string | null
+          discount_amount?: number
+          id?: string
+          order_id?: string | null
+          referred_telegram_user_id?: string
+          referrer_telegram_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_usage_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_messages: {
         Row: {
@@ -253,6 +318,10 @@ export type Database = {
       cleanup_expired_codes: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      generate_referral_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       has_role: {
         Args: {

@@ -164,7 +164,7 @@ async function handleStart(userId: string, chatId: string, messageId?: number) {
   const keyboard = {
     inline_keyboard: [
       [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
-      [{ text: '📋 Mes commandes', callback_data: 'my_orders' }],
+      [{ text: '🎁 Parrainage', callback_data: 'referral' }],
       [{ text: '💰 Tarification', callback_data: 'pricing' }],
       [{ text: '💬 Support', callback_data: 'support' }]
     ]
@@ -411,50 +411,62 @@ async function handleConfirmPayment(userId: string, chatId: string, state: any, 
   );
 }
 
-async function handleMyOrders(userId: string, chatId: string, messageId?: number) {
-  const { data: orders } = await supabase
-    .from('orders')
+async function handleReferral(userId: string, chatId: string, messageId?: number) {
+  // Get or create referral code for user
+  let { data: referralData } = await supabase
+    .from('referral_codes')
     .select('*')
     .eq('telegram_user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(10);
+    .single();
 
-  if (!orders || orders.length === 0) {
-    const keyboard = {
-      inline_keyboard: [
-        [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
-        [{ text: '🏠 Accueil', callback_data: 'home' }]
-      ]
-    };
+  if (!referralData) {
+    // Generate new referral code
+    const { data: codeResult } = await supabase.rpc('generate_referral_code');
     
-    await sendTelegramMessage(
-      chatId,
-      `<b>📋 Mes Commandes</b>
-
-Aucune commande pour l'instant.`,
-      keyboard,
-      messageId
-    );
-    return;
+    const { data: newReferral } = await supabase
+      .from('referral_codes')
+      .insert({
+        telegram_user_id: userId,
+        code: codeResult
+      })
+      .select()
+      .single();
+    
+    referralData = newReferral;
   }
 
-  const orderButtons = orders.map(order => [
-    { text: `${order.order_number} - ${order.status}`, callback_data: `order_${order.order_number}` }
-  ]);
+  // Get referral stats
+  const { data: referrals } = await supabase
+    .from('referral_usage')
+    .select('*')
+    .eq('referrer_telegram_user_id', userId);
+
+  const referralCount = referrals?.length || 0;
+  const totalEarnings = referralData?.total_earnings || 0;
 
   const keyboard = {
     inline_keyboard: [
-      ...orderButtons,
-      [{ text: '📝 Nouvelle commande', callback_data: 'new_order' }],
+      [{ text: '📤 Partager mon code', url: `https://t.me/share/url?url=Utilise mon code FlashGrade: ${referralData?.code} pour obtenir 10% de réduction sur ta première commande!&text=Code promo FlashGrade` }],
       [{ text: '🏠 Accueil', callback_data: 'home' }]
     ]
   };
 
   await sendTelegramMessage(
     chatId,
-    `<b>📋 Mes Commandes</b>
+    `<b>🎁 Programme de Parrainage</b>
 
-Vous avez ${orders.length} commande(s):`,
+<b>Ton code personnel:</b> <code>${referralData?.code}</code>
+
+<b>Comment ça marche ?</b>
+• Partage ton code avec des amis
+• Ils obtiennent <b>10% de réduction</b> sur leur 1ère commande
+• Tu gagnes <b>5€</b> par filleul ayant commandé
+
+<b>Tes statistiques:</b>
+👥 Personnes parrainées: ${referralCount}
+💰 Gains totaux: ${totalEarnings}€
+
+<i>💡 Clique sur "Partager" pour envoyer ton code facilement!</i>`,
     keyboard,
     messageId
   );
@@ -600,8 +612,8 @@ Envoyez-moi votre consigne:
           },
           messageId
         );
-      } else if (data === 'my_orders') {
-        await handleMyOrders(userId, chatId, messageId);
+      } else if (data === 'referral') {
+        await handleReferral(userId, chatId, messageId);
       } else if (data === 'pricing') {
         await handlePricing(chatId, messageId);
       } else if (data === 'support') {
@@ -789,7 +801,6 @@ Votre preuve a été envoyée avec succès. Notre équipe va la vérifier et vou
 Merci de votre confiance! 🙏`,
             {
               inline_keyboard: [
-                [{ text: '📋 Mes commandes', callback_data: 'my_orders' }],
                 [{ text: '💬 Support', callback_data: 'support' }],
                 [{ text: '🏠 Accueil', callback_data: 'home' }]
               ]
